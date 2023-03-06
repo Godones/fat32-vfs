@@ -1,6 +1,8 @@
+#![feature(let_chains)]
 #![no_std]
 extern crate alloc;
 
+use crate::fstype::FatDevice;
 use alloc::string::String;
 use alloc::sync::Arc;
 use core::fmt::{Debug, Formatter};
@@ -8,14 +10,12 @@ use fatfs::{DefaultTimeProvider, Dir, LossyOemCpConverter};
 use rvfs::inode::Inode;
 use rvfs::superblock::{DataOps, Device};
 use spin::Mutex;
-use crate::fstype::FatDevice;
 
+mod file;
 mod fstype;
 mod inode;
-mod file;
 
-
-type FatDir = Dir<FatDevice,DefaultTimeProvider,LossyOemCpConverter>;
+type FatDir = Dir<FatDevice, DefaultTimeProvider, LossyOemCpConverter>;
 /// Description:
 ///
 /// Because the fatfs dont support inode,so we need save some information in inode.
@@ -24,22 +24,19 @@ type FatDir = Dir<FatDevice,DefaultTimeProvider,LossyOemCpConverter>;
 /// that can identify the file uniquely but fatfs dont have inode number.
 pub struct FatInode {
     // parent
-    pub parent:Arc<Mutex<FatDir>>,
+    pub parent: Arc<Mutex<FatDir>>,
     // self: if the file is a directory,then the self is the directory's DIR struct.
-    pub current:FatInodeType,
+    pub current: FatInodeType,
 }
 
-pub enum FatInodeType{
+pub enum FatInodeType {
     Dir(Arc<Mutex<FatDir>>),
     File(String),
 }
 
-impl FatInode{
-    pub fn new(parent:Arc<Mutex<FatDir>>, current:FatInodeType) ->FatInode{
-        Self{
-            parent,
-            current
-        }
+impl FatInode {
+    pub fn new(parent: Arc<Mutex<FatDir>>, current: FatInodeType) -> FatInode {
+        Self { parent, current }
     }
 }
 
@@ -48,12 +45,12 @@ impl Debug for FatInode {
         let current = &self.current;
         match current {
             FatInodeType::Dir(_) => f.write_str("FatInode::Dir"),
-            FatInodeType::File(_) => f.write_str("FatInode::File")
+            FatInodeType::File(_) => f.write_str("FatInode::File"),
         }
     }
 }
 
-impl DataOps for FatInode{
+impl DataOps for FatInode {
     fn device(&self, _name: &str) -> Option<Arc<dyn Device>> {
         None
     }
@@ -62,9 +59,8 @@ impl DataOps for FatInode{
     }
 }
 
-
-fn get_fat_data(inode:Arc<Inode>)->&'static mut FatInode{
+fn get_fat_data(inode: Arc<Inode>) -> &'static mut FatInode {
     let inode_inner = inode.access_inner();
     let data = inode_inner.data.as_ref().unwrap();
-    unsafe{&mut *(data.data() as *mut FatInode)}
+    unsafe { &mut *(data.data() as *mut FatInode) }
 }

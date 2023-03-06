@@ -1,18 +1,17 @@
 use std::fs::{File, OpenOptions};
 
-
-
 use fatfs::{format_volume, FormatVolumeOptions, IoBase, Read, Seek, SeekFrom, Write};
 use fscommon::BufStream;
 
-
-struct MyBuffer{
-    buf:BufStream<File>,
+struct MyBuffer {
+    buf: BufStream<File>,
 }
 
-impl IoBase for MyBuffer { type Error = (); }
+impl IoBase for MyBuffer {
+    type Error = ();
+}
 
-impl Write for MyBuffer{
+impl Write for MyBuffer {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
         use std::io::Write;
         self.buf.write(buf).unwrap();
@@ -25,13 +24,12 @@ impl Write for MyBuffer{
     }
 }
 
-impl Read for MyBuffer{
+impl Read for MyBuffer {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
         use std::io::Read;
         self.buf.read(buf).unwrap();
         Ok(buf.len())
     }
-
 }
 
 impl Seek for MyBuffer {
@@ -46,22 +44,40 @@ impl Seek for MyBuffer {
     }
 }
 
-fn main(){
-    let file = OpenOptions::new().read(true).write(true).create(true).open("fat32.img").unwrap();
-    file.set_len(64*1024*1024).unwrap();
+fn main() {
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open("fat32.img")
+        .unwrap();
+    file.set_len(64 * 1024 * 1024).unwrap();
     let buf_file = BufStream::new(file);
-    let mut mybuffer = MyBuffer{buf:buf_file};
+    let mut mybuffer = MyBuffer { buf: buf_file };
     format_volume(&mut mybuffer, FormatVolumeOptions::new()).unwrap();
     let fs = fatfs::FileSystem::new(mybuffer, fatfs::FsOptions::new()).unwrap();
     let root_dir = fs.root_dir();
-    let mut file = root_dir.create_file("hello.txt").unwrap();
-    println!( "----------------------------------");
+    let mut file = root_dir.create_file("root.txt").unwrap();
+    println!("----------------------------------");
     file.write_all(b"Hello World!").unwrap();
-    let mut buf = [0u8;100];
+    let mut buf = [0u8; 100];
     file.seek(SeekFrom::Start(0)).unwrap();
     let len = file.read(&mut buf).unwrap();
     println!("Read {} bytes: {:?}", len, &buf[..len]);
     let f1 = root_dir.create_dir("/d1").unwrap();
     let _file = root_dir.create_dir("/d1/hello.txt").unwrap();
-    f1.iter().for_each(|x|println!("{:#?}",x));
+    f1.iter()
+        .for_each(|x| println!("{:#?}", x.unwrap().file_name()));
+    println!("----------");
+    root_dir
+        .iter()
+        .for_each(|x| println!("{:#?}", x.unwrap().file_name()));
+    println!("----------");
+    root_dir.rename("root.txt", &f1, "root2.txt").unwrap();
+    root_dir
+        .iter()
+        .for_each(|x| println!("{:#?}", x.unwrap().file_name()));
+    println!("----------");
+    f1.iter()
+        .for_each(|x| println!("{:#?}", x.unwrap().file_name()));
 }

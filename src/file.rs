@@ -1,12 +1,12 @@
+use crate::{get_fat_data, FatInodeType};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use fatfs::{Read, Seek, Write};
 use rvfs::dentry::{DirContext, DirEntryOps};
 use rvfs::file::{File, FileOps};
 use rvfs::StrResult;
-use crate::{get_fat_data,FatInodeType};
 
-pub const FAT_FILE_FILE_OPS:FileOps = {
+pub const FAT_FILE_FILE_OPS: FileOps = {
     let mut file_ops = FileOps::empty();
     file_ops.read = fat_read_file;
     file_ops.write = fat_write_file;
@@ -14,8 +14,7 @@ pub const FAT_FILE_FILE_OPS:FileOps = {
     file_ops
 };
 
-
-pub const FAT_DIR_FILE_OPS:FileOps = {
+pub const FAT_DIR_FILE_OPS: FileOps = {
     let mut dir_ops = FileOps::empty();
     dir_ops.readdir = fat_readdir;
     dir_ops.open = |_| Ok(());
@@ -24,13 +23,9 @@ pub const FAT_DIR_FILE_OPS:FileOps = {
     dir_ops
 };
 
+pub const FAT_DENTRY_OPS: DirEntryOps = { DirEntryOps::empty() };
 
-pub const FAT_DENTRY_OPS:DirEntryOps = {
-    
-    DirEntryOps::empty()
-};
-
-fn fat_read_file(file: Arc<File>, buf: &mut [u8],offset:u64) -> StrResult<usize> {
+fn fat_read_file(file: Arc<File>, buf: &mut [u8], offset: u64) -> StrResult<usize> {
     let inode = file.f_dentry.access_inner().d_inode.clone();
     let fat_data = get_fat_data(inode);
     let parent = &fat_data.parent;
@@ -51,9 +46,9 @@ fn fat_read_file(file: Arc<File>, buf: &mut [u8],offset:u64) -> StrResult<usize>
         Ok(res.unwrap())
     } else {
         Err("Not a file")
-    }
+    };
 }
-fn fat_write_file(file: Arc<File>, buf: &[u8],offset:u64) -> StrResult<usize> {
+fn fat_write_file(file: Arc<File>, buf: &[u8], offset: u64) -> StrResult<usize> {
     let inode = file.f_dentry.access_inner().d_inode.clone();
     let fat_data = get_fat_data(inode);
     let parent = &fat_data.parent;
@@ -74,7 +69,7 @@ fn fat_write_file(file: Arc<File>, buf: &[u8],offset:u64) -> StrResult<usize> {
         Ok(res.unwrap())
     } else {
         Err("Not a file")
-    }
+    };
 }
 
 fn fat_readdir(file: Arc<File>) -> StrResult<DirContext> {
@@ -82,7 +77,7 @@ fn fat_readdir(file: Arc<File>) -> StrResult<DirContext> {
     let fat_data = get_fat_data(inode);
     return if let FatInodeType::Dir(dir) = &fat_data.current {
         let mut data = Vec::new();
-        dir.lock().iter().for_each(|x|{
+        dir.lock().iter().for_each(|x| {
             if let Ok(x) = x {
                 data.extend_from_slice(x.file_name().as_bytes());
                 data.push(0);
@@ -91,7 +86,7 @@ fn fat_readdir(file: Arc<File>) -> StrResult<DirContext> {
         Ok(DirContext::new(data))
     } else {
         Err("Not a dir")
-    }
+    };
 }
 
 fn fat_flush(file: Arc<File>) -> StrResult<()> {
@@ -111,11 +106,9 @@ fn fat_flush(file: Arc<File>) -> StrResult<()> {
         Ok(())
     } else {
         Err("Not a file")
-    }
+    };
 }
 
-fn fat_fsync(file: Arc<File>,_datasync: bool) -> StrResult<()> {
+fn fat_fsync(file: Arc<File>, _datasync: bool) -> StrResult<()> {
     fat_flush(file)
 }
-
-
