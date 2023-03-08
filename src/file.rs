@@ -23,7 +23,7 @@ pub const FAT_DIR_FILE_OPS: FileOps = {
     dir_ops
 };
 
-pub const FAT_DENTRY_OPS: DirEntryOps = { DirEntryOps::empty() };
+pub const FAT_DENTRY_OPS: DirEntryOps = DirEntryOps::empty();
 
 fn fat_read_file(file: Arc<File>, buf: &mut [u8], offset: u64) -> StrResult<usize> {
     let inode = file.f_dentry.access_inner().d_inode.clone();

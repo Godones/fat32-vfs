@@ -7,7 +7,7 @@ use rvfs::dentry::DirEntry;
 use rvfs::file::{FileMode, FileOps};
 use rvfs::inode::{Inode, InodeMode, InodeOps};
 use rvfs::superblock::SuperBlock;
-use rvfs::StrResult;
+use rvfs::{iinfo, info, StrResult};
 use spin::Mutex;
 
 pub const FAT_INODE_DIR_OPS: InodeOps = {
@@ -52,6 +52,7 @@ fn fat_truncate(inode: Arc<Inode>) -> StrResult<()> {
 }
 
 fn fat_mkdir(dir: Arc<Inode>, dentry: Arc<DirEntry>, _mode: FileMode) -> StrResult<()> {
+    iinfo!("fat_mkdir");
     let fat_data = get_fat_data(dir.clone());
     let name = dentry.access_inner().d_name.clone();
     let res = __fat_create_dir_or_file(fat_data, true, &name);
@@ -76,6 +77,7 @@ fn fat_mkdir(dir: Arc<Inode>, dentry: Arc<DirEntry>, _mode: FileMode) -> StrResu
     );
     // set the dentry's inode
     dentry.access_inner().d_inode = inode;
+    iinfo!("fat_mkdir end");
     Ok(())
 }
 
@@ -199,6 +201,8 @@ fn __fat_create_dir_or_file(
     is_dir: bool,
     name: &str,
 ) -> Result<Arc<Mutex<FatDir>>, Error<()>> {
+    iinfo!("create dir or file");
+    info!("name: {}", name);
     let current = &fat_data.current;
     let dir = match current {
         FatInodeType::Dir(dir) => {
@@ -217,6 +221,7 @@ fn __fat_create_dir_or_file(
             return Err(Error::InvalidInput);
         }
     };
+    iinfo!("create dir or file success");
     Ok(dir)
 }
 

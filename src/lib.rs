@@ -2,7 +2,7 @@
 #![no_std]
 extern crate alloc;
 
-use crate::fstype::FatDevice;
+use crate::fstype::MyBuffer;
 use alloc::string::String;
 use alloc::sync::Arc;
 use core::fmt::{Debug, Formatter};
@@ -11,11 +11,11 @@ use rvfs::inode::Inode;
 use rvfs::superblock::{DataOps, Device};
 use spin::Mutex;
 
-mod file;
-mod fstype;
-mod inode;
+pub mod file;
+pub mod fstype;
+pub mod inode;
 
-type FatDir = Dir<FatDevice, DefaultTimeProvider, LossyOemCpConverter>;
+type FatDir = Dir<MyBuffer, DefaultTimeProvider, LossyOemCpConverter>;
 /// Description:
 ///
 /// Because the fatfs dont support inode,so we need save some information in inode.
