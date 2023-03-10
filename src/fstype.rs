@@ -1,7 +1,7 @@
 #![allow(unused)]
 use crate::file::{FAT_DENTRY_OPS, FAT_DIR_FILE_OPS};
 use crate::inode::FAT_INODE_DIR_OPS;
-use crate::{FatInode, FatInodeType};
+use crate::{FatDir, FatInode, FatInodeType};
 use alloc::boxed::Box;
 use alloc::string::ToString;
 use alloc::sync::{Arc, Weak};
@@ -13,7 +13,7 @@ use rvfs::mount::MountFlags;
 use rvfs::superblock::{
     DataOps, Device, FileSystemAttr, FileSystemType, SuperBlock, SuperBlockInner, SuperBlockOps,
 };
-use rvfs::{iinfo, StrResult};
+use rvfs::{ddebug, iinfo, StrResult};
 use spin::Mutex;
 
 pub struct FatDevice {
@@ -141,7 +141,7 @@ fn fat_get_super_blk(
     dev_name: &str,
     data: Option<Box<dyn DataOps>>,
 ) -> StrResult<Arc<SuperBlock>> {
-    iinfo!("fat get super block");
+    ddebug!("fat get super block");
     assert!(data.is_some());
     let device = data.as_ref().unwrap().as_ref().device(dev_name);
     assert!(device.is_some());
@@ -196,7 +196,7 @@ fn fat_sync_fs(sb_blk: Arc<SuperBlock>) -> StrResult<()> {
 /// create the root inode for fat file system
 fn fat_root_inode(
     sb_blk: Arc<SuperBlock>,
-    dir: Dir<MyBuffer, DefaultTimeProvider, LossyOemCpConverter>,
+    dir: FatDir,
 ) -> Arc<Inode> {
     let device = sb_blk.device.as_ref().unwrap().clone();
     let inode = Inode::new(

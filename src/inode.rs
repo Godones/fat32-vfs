@@ -3,11 +3,12 @@ use crate::{get_fat_data, FatDir, FatInode, FatInodeType};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use fatfs::{Error, Seek};
+use log::debug;
 use rvfs::dentry::DirEntry;
 use rvfs::file::{FileMode, FileOps};
 use rvfs::inode::{Inode, InodeMode, InodeOps};
 use rvfs::superblock::SuperBlock;
-use rvfs::{iinfo, info, StrResult};
+use rvfs::{ddebug, StrResult};
 use spin::Mutex;
 
 pub const FAT_INODE_DIR_OPS: InodeOps = {
@@ -16,6 +17,7 @@ pub const FAT_INODE_DIR_OPS: InodeOps = {
     ops.mkdir = fat_mkdir;
     ops.rmdir = fat_rmdir;
     ops.rename = fat_rename;
+    ops.lookup = fat_lookup;
     ops
 };
 
@@ -52,7 +54,7 @@ fn fat_truncate(inode: Arc<Inode>) -> StrResult<()> {
 }
 
 fn fat_mkdir(dir: Arc<Inode>, dentry: Arc<DirEntry>, _mode: FileMode) -> StrResult<()> {
-    iinfo!("fat_mkdir");
+    ddebug!("fat_mkdir");
     let fat_data = get_fat_data(dir.clone());
     let name = dentry.access_inner().d_name.clone();
     let res = __fat_create_dir_or_file(fat_data, true, &name);
@@ -77,7 +79,7 @@ fn fat_mkdir(dir: Arc<Inode>, dentry: Arc<DirEntry>, _mode: FileMode) -> StrResu
     );
     // set the dentry's inode
     dentry.access_inner().d_inode = inode;
-    iinfo!("fat_mkdir end");
+    ddebug!("fat_mkdir end");
     Ok(())
 }
 
@@ -180,6 +182,70 @@ fn fat_rename(
     Ok(())
 }
 
+fn fat_lookup(p_dir: Arc<Inode>, dentry: Arc<DirEntry>) -> StrResult<()> {
+    ddebug!("fat_lookup start");
+    let fat_data = get_fat_data(p_dir.clone());
+    let name = dentry.access_inner().d_name.clone();
+    let current = &fat_data.current;
+    if let FatInodeType::Dir(c_dir) = current {
+        let dir = c_dir.lock();
+        let res = dir.open_dir(&name);
+        let res2 = dir.open_file(&name);
+        drop(dir);
+        if res.is_err() && res2.is_err() {
+            return Err("File not exist");
+        }
+        let sb_blk = p_dir.super_blk.upgrade().unwrap();
+        if res.is_ok() {
+            let dir = res.unwrap();
+            let mut count = 0;
+            dir.iter().for_each(|x| {
+                if x.is_ok() {
+                    count += 1;
+                }
+            });
+            let current = FatInodeType::Dir(Arc::new(Mutex::new(dir)));
+            let inode = generate_fat_inode(
+                sb_blk,
+                FAT_INODE_DIR_OPS,
+                FAT_DIR_FILE_OPS,
+                InodeMode::S_DIR,
+                c_dir.clone(),
+                current,
+            );
+            // set the dir size with sub file numer
+            inode.access_inner().file_size = count;
+            dentry.access_inner().d_inode = inode;
+        } else if res2.is_ok() {
+            let current = FatInodeType::File(name.clone());
+            let inode = generate_fat_inode(
+                sb_blk,
+                FAT_INODE_FILE_OPS,
+                FAT_FILE_FILE_OPS,
+                InodeMode::S_FILE,
+                c_dir.clone(),
+                current,
+            );
+            // set the file size
+            let parent_dir = fat_data.parent.lock();
+            parent_dir.iter().for_each(|x| {
+                if x.is_ok() {
+                    let x = x.unwrap();
+                    if x.file_name() == name {
+                        debug!("set file size:{}", x.len());
+                        inode.access_inner().file_size = x.len() as usize;
+                    }
+                }
+            });
+            dentry.access_inner().d_inode = inode;
+        }
+    } else {
+        return Err("It is not a dir");
+    }
+    ddebug!("fat_lookup end");
+    Ok(())
+}
+
 /// user should set the file size in the inode after calling this function
 fn generate_fat_inode(
     sb_blk: Arc<SuperBlock>,
@@ -201,8 +267,8 @@ fn __fat_create_dir_or_file(
     is_dir: bool,
     name: &str,
 ) -> Result<Arc<Mutex<FatDir>>, Error<()>> {
-    iinfo!("create dir or file");
-    info!("name: {}", name);
+    ddebug!("create dir or file");
+    debug!("name: {}", name);
     let current = &fat_data.current;
     let dir = match current {
         FatInodeType::Dir(dir) => {
@@ -221,7 +287,7 @@ fn __fat_create_dir_or_file(
             return Err(Error::InvalidInput);
         }
     };
-    iinfo!("create dir or file success");
+    ddebug!("create dir or file success");
     Ok(dir)
 }
 

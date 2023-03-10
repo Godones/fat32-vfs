@@ -4,16 +4,19 @@ use rvfs::file::{
     vfs_mkdir, vfs_open_file, vfs_read_file, vfs_readdir, vfs_write_file, FileFlags, FileMode,
 };
 use rvfs::mount::{do_mount, MountFlags};
+use rvfs::stat::vfs_getattr;
 use rvfs::superblock::{register_filesystem, DataOps, Device};
-use rvfs::{init_vfs, FakeFSC};
+use rvfs::{init_process_info, mount_rootfs, FakeFSC};
 use std::fmt::Debug;
 use std::fs::{File, OpenOptions};
 use std::os::unix::fs::FileExt;
 use std::ptr::null;
 use std::sync::Arc;
+
 fn main() {
     env_logger::init();
-    init_vfs();
+    let mnt = mount_rootfs();
+    init_process_info(mnt);
     register_filesystem(FAT).unwrap();
     vfs_mkdir::<FakeFSC>("/fs", FileMode::FMODE_WRITE).unwrap();
     vfs_mkdir::<FakeFSC>("/fs/fat32", FileMode::FMODE_WRITE).unwrap();
@@ -30,10 +33,13 @@ fn main() {
     let img = FatImg::new(file);
     let data = Fat32Data::new(Arc::new(img));
     let data = Box::new(data);
-    let mount =
+    let _mount =
         do_mount::<FakeFSC>("fat32", "/fs/fat32", "fat", MountFlags::empty(), Some(data)).unwrap();
     // println!("mount: {:#?}",mount);
-    vfs_mkdir::<FakeFSC>("/fs/fat32/tmp", FileMode::FMODE_WRITE).unwrap();
+    let res = vfs_mkdir::<FakeFSC>("/fs/fat32/tmp", FileMode::FMODE_WRITE);
+    if res.is_err() {
+        println!("mkdir error, it has been created");
+    }
     let file = vfs_open_file::<FakeFSC>(
         "/fs/fat32/hello.txt",
         FileFlags::O_RDWR | FileFlags::O_CREAT,
@@ -57,6 +63,11 @@ fn main() {
     println!("read: {}", String::from_utf8_lossy(&buf[..len]));
     vfs_rename::<FakeFSC>("/fs/fat32/hello.txt", "/fs/fat32/hello2.txt").unwrap();
     println!("file: {:#?}", file);
+
+    let attr = vfs_getattr::<FakeFSC>("fs/fat32/hello2.txt").unwrap();
+    println!("attr: {:#?}", attr);
+    // let attr = vfs_getattr::<FakeFSC>("fs/fat32/u1.txt").unwrap();
+    // println!("attr: {:#?}", attr);
 }
 
 #[derive(Debug)]
