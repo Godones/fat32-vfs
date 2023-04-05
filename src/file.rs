@@ -2,10 +2,9 @@ use crate::{get_fat_data, FatInodeType};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use fatfs::{Read, Seek, Write};
-
 use rvfs::dentry::{DirContext, DirEntryOps};
 use rvfs::file::{File, FileOps};
-use rvfs::StrResult;
+use rvfs::{StrResult,};
 
 pub const FAT_FILE_FILE_OPS: FileOps = {
     let mut file_ops = FileOps::empty();
@@ -40,11 +39,22 @@ fn fat_read_file(file: Arc<File>, buf: &mut [u8], offset: u64) -> StrResult<usiz
         if res.is_err() {
             return Err("Seek file failed");
         }
-        let res = file.read(buf);
-        if res.is_err() {
-            return Err("Read file failed");
-        }
-        Ok(res.unwrap())
+        let mut buf = buf;
+        let mut count = 0;
+        while buf.len() > 0 {
+            let res = file.read(buf);
+            if res.is_err() {
+                return Err("Read file failed");
+            }
+            let len = res.unwrap();
+            if len == 0 {
+                break;
+            }
+            count += len;
+            buf = &mut buf[len..];
+        };
+
+        Ok(count)
     } else {
         Err("Not a file")
     };
@@ -63,11 +73,11 @@ fn fat_write_file(file: Arc<File>, buf: &[u8], offset: u64) -> StrResult<usize> 
         if res.is_err() {
             return Err("Seek file failed");
         }
-        let res = file.write(buf);
+        let res = file.write_all(buf);
         if res.is_err() {
             return Err("Write file failed");
         }
-        Ok(res.unwrap())
+        Ok(buf.len())
     } else {
         Err("Not a file")
     };

@@ -1,5 +1,5 @@
 use fat32_vfs::fstype::FAT;
-use rvfs::file::{vfs_mkdir, vfs_open_file, FileFlags, FileMode};
+use rvfs::file::{vfs_mkdir, vfs_open_file, OpenFlags, FileMode};
 use rvfs::mount::{do_mount, MountFlags};
 use rvfs::superblock::{register_filesystem, DataOps, Device};
 use rvfs::{init_process_info, mount_rootfs, FakeFSC, PROCESS_FS_CONTEXT};
@@ -12,7 +12,7 @@ fn main() {
     println!("init vfs");
     let rootfs = mount_rootfs();
     init_process_info(rootfs);
-    let file = vfs_open_file::<FakeFSC>("/", FileFlags::O_RDWR, FileMode::FMODE_WRITE).unwrap();
+    let file = vfs_open_file::<FakeFSC>("/", OpenFlags::O_RDWR, FileMode::FMODE_WRITE).unwrap();
     println!("file: {:#?}", file);
     register_filesystem(FAT).unwrap();
 

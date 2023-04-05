@@ -1,19 +1,17 @@
-#![allow(unused)]
 use crate::file::{FAT_DENTRY_OPS, FAT_DIR_FILE_OPS};
 use crate::inode::FAT_INODE_DIR_OPS;
 use crate::{FatDir, FatInode, FatInodeType};
 use alloc::boxed::Box;
 use alloc::string::ToString;
 use alloc::sync::{Arc, Weak};
-use fatfs::{DefaultTimeProvider, Dir, IoBase, LossyOemCpConverter, Read, Seek, SeekFrom, Write};
-use fscommon::BufStream;
+use fatfs::{IoBase,Read, Seek, SeekFrom, Write};
 use rvfs::dentry::{DirEntry, DirFlags};
 use rvfs::inode::{simple_statfs, Inode, InodeMode};
 use rvfs::mount::MountFlags;
 use rvfs::superblock::{
     DataOps, Device, FileSystemAttr, FileSystemType, SuperBlock, SuperBlockInner, SuperBlockOps,
 };
-use rvfs::{ddebug, iinfo, StrResult};
+use rvfs::{ddebug, StrResult};
 use spin::Mutex;
 
 pub struct FatDevice {
@@ -33,7 +31,7 @@ impl core2::io::Read for FatDevice {
         let len = self
             .device_file
             .read(buf, self.pos as usize)
-            .map_err(|x| core2::io::Error::new(core2::io::ErrorKind::Other, "other"))?;
+            .map_err(|_x| core2::io::Error::new(core2::io::ErrorKind::Other, "other"))?;
         self.pos += len as i64;
         Ok(len)
     }
@@ -43,7 +41,7 @@ impl core2::io::Write for FatDevice {
         let len = self
             .device_file
             .write(buf, self.pos as usize)
-            .map_err(|x| core2::io::Error::new(core2::io::ErrorKind::Other, "other"))?;
+            .map_err(|_x| core2::io::Error::new(core2::io::ErrorKind::Other, "other"))?;
         self.pos += len as i64;
         Ok(len)
     }
@@ -70,54 +68,41 @@ impl core2::io::Seek for FatDevice {
     }
 }
 
-pub struct MyBuffer {
-    buf: BufStream<FatDevice>,
-}
 
-impl IoBase for MyBuffer {
+impl IoBase for FatDevice{
     type Error = ();
 }
-
-impl Write for MyBuffer {
+impl Write for FatDevice{
     fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
-        use core2::io::Write;
-        self.buf.write_all(buf).unwrap();
-        Ok(buf.len())
+        
+        core2::io::Write::write(self, buf).map_err(|_| ())
     }
+
     fn flush(&mut self) -> Result<(), Self::Error> {
-        use core2::io::Write;
-        self.buf.flush().unwrap();
-        Ok(())
+        
+        core2::io::Write::flush(self).map_err(|_| ())
     }
 }
 
-impl Read for MyBuffer {
+impl Read for FatDevice{
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
-        use core2::io::Read;
-        self.buf.read_exact(buf).unwrap();
-        Ok(buf.len())
+        
+        core2::io::Read::read(self, buf).map_err(|_| ())
     }
 }
 
-impl Seek for MyBuffer {
+impl Seek for FatDevice {
     fn seek(&mut self, pos: SeekFrom) -> Result<u64, Self::Error> {
-        use core2::io::Seek;
+        
         let ans = match pos {
-            SeekFrom::Start(pos) => self.buf.seek(core2::io::SeekFrom::Start(pos)).unwrap(),
-            SeekFrom::End(pos) => self.buf.seek(core2::io::SeekFrom::End(pos)).unwrap(),
-            SeekFrom::Current(pos) => self.buf.seek(core2::io::SeekFrom::Current(pos)).unwrap(),
+            SeekFrom::Start(pos) => core2::io::Seek::seek(self,core2::io::SeekFrom::Start(pos)),
+            SeekFrom::End(pos) => core2::io::Seek::seek(self,core2::io::SeekFrom::End(pos)),
+            SeekFrom::Current(pos) => core2::io::Seek::seek(self,core2::io::SeekFrom::Current(pos)),
         };
-        Ok(ans)
+        ans.map_err(|_| ())
     }
 }
 
-impl MyBuffer {
-    pub fn new(fat_device: FatDevice) -> Self {
-        Self {
-            buf: BufStream::new(fat_device),
-        }
-    }
-}
 
 pub const FATFS_SB_OPS: SuperBlockOps = {
     let mut sb_ops = SuperBlockOps::empty();
@@ -147,7 +132,7 @@ fn fat_get_super_blk(
     assert!(device.is_some());
     let device = device.unwrap();
     let fat_device = FatDevice::new(device.clone());
-    let fs = fatfs::FileSystem::new(MyBuffer::new(fat_device), fatfs::FsOptions::new()).unwrap();
+    let fs = fatfs::FileSystem::new(fat_device, fatfs::FsOptions::new()).unwrap();
     let stats = fs.stats();
     if stats.is_err() {
         return Err("read fat data error");
@@ -179,13 +164,13 @@ fn fat_get_super_blk(
 
 fn fat_kill_super_blk(super_blk: Arc<SuperBlock>) {
     let ops = super_blk.super_block_ops.sync_fs;
-    ops(super_blk);
+    ops(super_blk).unwrap();
 }
 
 fn fat_sync_fs(sb_blk: Arc<SuperBlock>) -> StrResult<()> {
     let device = sb_blk.device.as_ref().unwrap().clone();
     let fat_device = FatDevice::new(device);
-    let fs = fatfs::FileSystem::new(MyBuffer::new(fat_device), fatfs::FsOptions::new()).unwrap();
+    let fs = fatfs::FileSystem::new(fat_device, fatfs::FsOptions::new()).unwrap();
     let res = fs.unmount();
     if res.is_err() {
         return Err("sync error");
@@ -198,7 +183,7 @@ fn fat_root_inode(
     sb_blk: Arc<SuperBlock>,
     dir: FatDir,
 ) -> Arc<Inode> {
-    let device = sb_blk.device.as_ref().unwrap().clone();
+    let _device = sb_blk.device.as_ref().unwrap().clone();
     let inode = Inode::new(
         sb_blk,
         0,

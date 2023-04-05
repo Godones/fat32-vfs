@@ -1,48 +1,5 @@
+use std::fs::OpenOptions;
 use fatfs::{IoBase, Read, Seek, SeekFrom, Write};
-use fscommon::BufStream;
-use std::fs::{File, OpenOptions};
-
-struct MyBuffer {
-    buf: BufStream<File>,
-}
-
-impl IoBase for MyBuffer {
-    type Error = ();
-}
-
-impl Write for MyBuffer {
-    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
-        use std::io::Write;
-        self.buf.write(buf).unwrap();
-        Ok(buf.len())
-    }
-    fn flush(&mut self) -> Result<(), Self::Error> {
-        use std::io::Write;
-        self.buf.flush().unwrap();
-        Ok(())
-    }
-}
-
-impl Read for MyBuffer {
-    fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
-        use std::io::Read;
-        self.buf.read(buf).unwrap();
-        Ok(buf.len())
-    }
-}
-
-impl Seek for MyBuffer {
-    fn seek(&mut self, pos: SeekFrom) -> Result<u64, Self::Error> {
-        use std::io::Seek;
-        let ans = match pos {
-            SeekFrom::Start(pos) => self.buf.seek(core2::io::SeekFrom::Start(pos)).unwrap(),
-            SeekFrom::End(pos) => self.buf.seek(core2::io::SeekFrom::End(pos)).unwrap(),
-            SeekFrom::Current(pos) => self.buf.seek(core2::io::SeekFrom::Current(pos)).unwrap(),
-        };
-        Ok(ans)
-    }
-}
-
 fn main() {
     let file = OpenOptions::new()
         .read(true)
@@ -52,9 +9,8 @@ fn main() {
         .unwrap();
     // file.set_len(64 * 1024 * 1024).unwrap();
     let buf_file = BufStream::new(file);
-    let mut mybuffer = MyBuffer { buf: buf_file };
     // format_volume(&mut mybuffer, FormatVolumeOptions::new()).unwrap();
-    let fs = fatfs::FileSystem::new(mybuffer, fatfs::FsOptions::new()).unwrap();
+    let fs = fatfs::FileSystem::new(buf_file, fatfs::FsOptions::new()).unwrap();
     let root_dir = fs.root_dir();
     let mut file = root_dir.create_file("root.txt").unwrap();
     println!("----------------------------------");
@@ -79,4 +35,47 @@ fn main() {
     println!("----------");
     f1.iter()
         .for_each(|x| println!("{:#?}", x.unwrap().file_name()));
+}
+
+
+struct BufStream {
+    file: std::fs::File,
+}
+
+
+impl BufStream {
+    pub fn new(file: std::fs::File) -> Self {
+        BufStream { file }
+    }
+}
+
+
+impl IoBase for BufStream{
+    type Error = ();
+}
+
+impl Read for BufStream{
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+        std::io::Read::read(&mut self.file, buf).map_err(|_| ())
+    }
+}
+
+impl Write for BufStream{
+    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+        std::io::Write::write(&mut self.file, buf).map_err(|_| ())
+    }
+
+    fn flush(&mut self) -> Result<(), Self::Error> {
+        std::io::Write::flush(&mut self.file).map_err(|_| ())
+    }
+}
+
+impl Seek for BufStream{
+    fn seek(&mut self, pos: SeekFrom) -> Result<u64, Self::Error> {
+        match pos {
+            SeekFrom::Start(pos) => std::io::Seek::seek(&mut self.file, std::io::SeekFrom::Start(pos)).map_err(|_| ()),
+            SeekFrom::End(pos) => std::io::Seek::seek(&mut self.file, std::io::SeekFrom::End(pos)).map_err(|_| ()),
+            SeekFrom::Current(pos) => std::io::Seek::seek(&mut self.file, std::io::SeekFrom::Current(pos)).map_err(|_| ()),
+        }
+    }
 }

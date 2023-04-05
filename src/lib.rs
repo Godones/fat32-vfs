@@ -2,7 +2,7 @@
 #![no_std]
 extern crate alloc;
 
-use crate::fstype::MyBuffer;
+use crate::fstype::{FatDevice};
 use alloc::string::String;
 use alloc::sync::Arc;
 use core::fmt::{Debug, Formatter};
@@ -15,7 +15,7 @@ pub mod file;
 pub mod fstype;
 pub mod inode;
 
-type FatDir = Dir<MyBuffer, DefaultTimeProvider, LossyOemCpConverter>;
+type FatDir = Dir<FatDevice, DefaultTimeProvider, LossyOemCpConverter>;
 /// Description:
 ///
 /// Because the fatfs dont support inode,so we need save some information in inode.

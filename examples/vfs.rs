@@ -1,10 +1,10 @@
 use fat32_vfs::fstype::FAT;
 use rvfs::dentry::{vfs_rename, vfs_truncate};
 use rvfs::file::{
-    vfs_mkdir, vfs_open_file, vfs_read_file, vfs_readdir, vfs_write_file, FileFlags, FileMode,
+    vfs_mkdir, vfs_open_file, vfs_read_file, vfs_readdir, vfs_write_file, OpenFlags, FileMode,
 };
 use rvfs::mount::{do_mount, MountFlags};
-use rvfs::stat::vfs_getattr;
+use rvfs::stat::{StatFlags, vfs_getattr};
 use rvfs::superblock::{register_filesystem, DataOps, Device};
 use rvfs::{init_process_info, mount_rootfs, FakeFSC};
 use std::fmt::Debug;
@@ -20,7 +20,7 @@ fn main() {
     register_filesystem(FAT).unwrap();
     vfs_mkdir::<FakeFSC>("/fs", FileMode::FMODE_WRITE).unwrap();
     vfs_mkdir::<FakeFSC>("/fs/fat32", FileMode::FMODE_WRITE).unwrap();
-    let file = vfs_open_file::<FakeFSC>("/fs/", FileFlags::O_RDWR, FileMode::FMODE_WRITE).unwrap();
+    let file = vfs_open_file::<FakeFSC>("/fs/", OpenFlags::O_RDWR, FileMode::FMODE_WRITE).unwrap();
     vfs_readdir(file).unwrap().into_iter().for_each(|name| {
         println!("name: {}", name);
     });
@@ -42,12 +42,12 @@ fn main() {
     }
     let file = vfs_open_file::<FakeFSC>(
         "/fs/fat32/hello.txt",
-        FileFlags::O_RDWR | FileFlags::O_CREAT,
+        OpenFlags::O_RDWR | OpenFlags::O_CREAT,
         FileMode::FMODE_WRITE,
     )
     .unwrap();
     let dir =
-        vfs_open_file::<FakeFSC>("/fs/fat32/", FileFlags::O_RDWR, FileMode::FMODE_WRITE).unwrap();
+        vfs_open_file::<FakeFSC>("/fs/fat32/", OpenFlags::O_RDWR, FileMode::FMODE_WRITE).unwrap();
     println!("file: {:#?}", dir);
     vfs_readdir(dir).unwrap().into_iter().for_each(|name| {
         println!("name: {}", name);
@@ -64,7 +64,7 @@ fn main() {
     vfs_rename::<FakeFSC>("/fs/fat32/hello.txt", "/fs/fat32/hello2.txt").unwrap();
     println!("file: {:#?}", file);
 
-    let attr = vfs_getattr::<FakeFSC>("fs/fat32/hello2.txt").unwrap();
+    let attr = vfs_getattr::<FakeFSC>("fs/fat32/hello2.txt",StatFlags::empty()).unwrap();
     println!("attr: {:#?}", attr);
     // let attr = vfs_getattr::<FakeFSC>("fs/fat32/u1.txt").unwrap();
     // println!("attr: {:#?}", attr);

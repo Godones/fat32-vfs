@@ -123,7 +123,6 @@ fn fat_create(dir: Arc<Inode>, dentry: Arc<DirEntry>, _mode: FileMode) -> StrRes
     Ok(())
 }
 
-// TODO! solve it
 fn fat_rename(
     dir: Arc<Inode>,
     old_dentry: Arc<DirEntry>,
@@ -152,6 +151,8 @@ fn fat_rename(
                 }
                 _ => return Err("fat error"),
             }
+            let old_fat_file_data = get_fat_data(old_dentry.access_inner().d_inode.clone());
+            old_fat_file_data.current = FatInodeType::File(new_name);
         } else {
             return Err("It is not a dir");
         }
@@ -174,6 +175,9 @@ fn fat_rename(
                 }
                 _ => return Err("fat error")
             }
+            let old_fat_file_data = get_fat_data(old_dentry.access_inner().d_inode.clone());
+            old_fat_file_data.current = FatInodeType::File(new_name);
+            old_fat_file_data.parent = new_fat_data.parent.clone();
         }else {
             return Err("It is not a dir")
         }
