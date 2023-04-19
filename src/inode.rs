@@ -1,6 +1,7 @@
 use crate::file::{FAT_DIR_FILE_OPS, FAT_FILE_FILE_OPS};
 use crate::{get_fat_data, FatDir, FatInode, FatInodeType};
 use alloc::boxed::Box;
+use alloc::string::ToString;
 use alloc::sync::Arc;
 use fatfs::{Error, Seek};
 use log::debug;
@@ -18,6 +19,7 @@ pub const FAT_INODE_DIR_OPS: InodeOps = {
     ops.rmdir = fat_rmdir;
     ops.rename = fat_rename;
     ops.lookup = fat_lookup;
+    ops.unlink = fat_unlink;
     ops
 };
 
@@ -32,13 +34,9 @@ fn fat_truncate(inode: Arc<Inode>) -> StrResult<()> {
     let inode_inner = inode.access_inner();
     let file_size = inode_inner.file_size;
     let parent = &fat_data.parent;
-    let parent = parent.lock();
-    if let FatInodeType::File(name) = &fat_data.current {
-        let file = parent.open_file(name);
-        if file.is_err() {
-            return Err("Open file failed");
-        }
-        let mut file = file.unwrap();
+    let _parent = parent.lock();
+    if let FatInodeType::File((_name, file)) = &fat_data.current {
+        let mut file = file.as_ref().unwrap().lock();
         let res = file.seek(fatfs::SeekFrom::Start(file_size as u64));
         if res.is_err() {
             return Err("Seek file failed");
@@ -58,16 +56,14 @@ fn fat_mkdir(dir: Arc<Inode>, dentry: Arc<DirEntry>, _mode: FileMode) -> StrResu
     let fat_data = get_fat_data(dir.clone());
     let name = dentry.access_inner().d_name.clone();
     let res = __fat_create_dir_or_file(fat_data, true, &name);
-    let parent_dir = match res {
-        Ok(dir) => dir,
+    let (parent_dir, current) = match res {
+        Ok((dir, cur)) => (dir, cur),
         Err(Error::InvalidInput) => return Err("File exist"),
         Err(Error::NotEnoughSpace) => return Err("No space"),
         Err(Error::Io(_)) => return Err("IO error"),
         _ => return Err("Unknown error"),
     };
     let sb_blk = dir.super_blk.upgrade().unwrap();
-    let current = parent_dir.lock().open_dir(&name).unwrap();
-    let current = FatInodeType::Dir(Arc::new(Mutex::new(current)));
     // create a inode for the dentry
     let inode = generate_fat_inode(
         sb_blk,
@@ -97,18 +93,31 @@ fn fat_rmdir(dir: Arc<Inode>, dentry: Arc<DirEntry>) -> StrResult<()> {
     Ok(())
 }
 
+fn fat_unlink(dir: Arc<Inode>, dentry: Arc<DirEntry>) -> StrResult<()> {
+    let fat_data = get_fat_data(dir);
+    let name = dentry.access_inner().d_name.clone();
+    let res = __fat_remove_dir_or_file(fat_data, &name);
+    match res {
+        Ok(_) => {}
+        Err(Error::InvalidInput) => return Err("File not exist"),
+        Err(Error::NotEnoughSpace) => return Err("No space"),
+        Err(Error::Io(_)) => return Err("IO error"),
+        _ => return Err("Unknown error"),
+    };
+    Ok(())
+}
+
 fn fat_create(dir: Arc<Inode>, dentry: Arc<DirEntry>, _mode: FileMode) -> StrResult<()> {
     let fat_data = get_fat_data(dir.clone());
     let name = dentry.access_inner().d_name.clone();
     let res = __fat_create_dir_or_file(fat_data, false, &name);
-    let parent = match res {
-        Ok(dir) => dir,
+    let (parent, current) = match res {
+        Ok((dir, file)) => (dir, file),
         Err(Error::NotEnoughSpace) => return Err("No space"),
         Err(Error::Io(_)) => return Err("IO error"),
         _ => return Err("Unknown error"),
     };
     let sb_blk = dir.super_blk.upgrade().unwrap();
-    let current = FatInodeType::File(name.clone());
     // create a inode for the dentry
     let inode = generate_fat_inode(
         sb_blk,
@@ -152,7 +161,10 @@ fn fat_rename(
                 _ => return Err("fat error"),
             }
             let old_fat_file_data = get_fat_data(old_dentry.access_inner().d_inode.clone());
-            old_fat_file_data.current = FatInodeType::File(new_name);
+
+            if let FatInodeType::File((_name, Some(file))) = &old_fat_file_data.current {
+                old_fat_file_data.current = FatInodeType::File((new_name, Some(file.clone())))
+            }
         } else {
             return Err("It is not a dir");
         }
@@ -176,7 +188,10 @@ fn fat_rename(
                 _ => return Err("fat error")
             }
             let old_fat_file_data = get_fat_data(old_dentry.access_inner().d_inode.clone());
-            old_fat_file_data.current = FatInodeType::File(new_name);
+            if let FatInodeType::File((_name,Some(file))) = &old_fat_file_data.current {
+                old_fat_file_data.current = FatInodeType::File((new_name, Some(file.clone())))
+            }
+
             old_fat_file_data.parent = new_fat_data.parent.clone();
         }else {
             return Err("It is not a dir")
@@ -221,7 +236,8 @@ fn fat_lookup(p_dir: Arc<Inode>, dentry: Arc<DirEntry>) -> StrResult<()> {
             inode.access_inner().file_size = count;
             dentry.access_inner().d_inode = inode;
         } else if res2.is_ok() {
-            let current = FatInodeType::File(name.clone());
+            let file = res2.unwrap();
+            let current = FatInodeType::File((name.clone(), Some(Arc::new(Mutex::new(file)))));
             let inode = generate_fat_inode(
                 sb_blk,
                 FAT_INODE_FILE_OPS,
@@ -231,13 +247,14 @@ fn fat_lookup(p_dir: Arc<Inode>, dentry: Arc<DirEntry>) -> StrResult<()> {
                 current,
             );
             // set the file size
-            let parent_dir = fat_data.parent.lock();
+            let parent_dir = c_dir.lock();
             parent_dir.iter().for_each(|x| {
                 if x.is_ok() {
                     let x = x.unwrap();
                     if x.file_name() == name {
                         debug!("set file size:{}", x.len());
                         inode.access_inner().file_size = x.len() as usize;
+                        return;
                     }
                 }
             });
@@ -270,29 +287,29 @@ fn __fat_create_dir_or_file(
     fat_data: &mut FatInode,
     is_dir: bool,
     name: &str,
-) -> Result<Arc<Mutex<FatDir>>, Error<()>> {
+) -> Result<(Arc<Mutex<FatDir>>, FatInodeType), Error<()>> {
     ddebug!("create dir or file");
     debug!("name: {}", name);
     let current = &fat_data.current;
-    let dir = match current {
+    return match current {
         FatInodeType::Dir(dir) => {
             let dir_lock = dir.lock();
             if is_dir {
-                dir_lock.create_dir(name)?;
+                let new_dir = dir_lock.create_dir(name)?;
+                Ok((
+                    dir.clone(),
+                    FatInodeType::Dir(Arc::new(Mutex::new(new_dir))),
+                ))
             } else {
-                let mut file = dir_lock.create_file(name)?;
-                // make file size to 0
-                file.truncate()?;
-            };
-            drop(dir_lock);
-            dir.clone()
+                let file = dir_lock.create_file(name)?;
+                Ok((
+                    dir.clone(),
+                    FatInodeType::File((name.to_string(), Some(Arc::new(Mutex::new(file))))),
+                ))
+            }
         }
-        _ => {
-            return Err(Error::InvalidInput);
-        }
+        _ => Err(Error::InvalidInput),
     };
-    ddebug!("create dir or file success");
-    Ok(dir)
 }
 
 fn __fat_remove_dir_or_file(fat_data: &mut FatInode, name: &str) -> Result<(), Error<()>> {

@@ -2,11 +2,11 @@
 #![no_std]
 extern crate alloc;
 
-use crate::fstype::{FatDevice};
+use crate::fstype::FatDevice;
 use alloc::string::String;
 use alloc::sync::Arc;
 use core::fmt::{Debug, Formatter};
-use fatfs::{DefaultTimeProvider, Dir, LossyOemCpConverter};
+use fatfs::{DefaultTimeProvider, Dir, File, LossyOemCpConverter};
 use rvfs::inode::Inode;
 use rvfs::superblock::{DataOps, Device};
 use spin::Mutex;
@@ -16,6 +16,7 @@ pub mod fstype;
 pub mod inode;
 
 type FatDir = Dir<FatDevice, DefaultTimeProvider, LossyOemCpConverter>;
+type FatFile = File<FatDevice, DefaultTimeProvider, LossyOemCpConverter>;
 /// Description:
 ///
 /// Because the fatfs dont support inode,so we need save some information in inode.
@@ -31,7 +32,7 @@ pub struct FatInode {
 
 pub enum FatInodeType {
     Dir(Arc<Mutex<FatDir>>),
-    File(String),
+    File((String, Option<Arc<Mutex<FatFile>>>)),
 }
 
 impl FatInode {

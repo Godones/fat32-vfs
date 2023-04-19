@@ -1,5 +1,5 @@
 use fat32_vfs::fstype::FAT;
-use rvfs::file::{vfs_mkdir, vfs_open_file, OpenFlags, FileMode};
+use rvfs::file::{vfs_mkdir, vfs_open_file, FileMode, OpenFlags};
 use rvfs::mount::{do_mount, MountFlags};
 use rvfs::superblock::{register_filesystem, DataOps, Device};
 use rvfs::{init_process_info, mount_rootfs, FakeFSC, PROCESS_FS_CONTEXT};

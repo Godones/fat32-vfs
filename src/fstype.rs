@@ -4,7 +4,7 @@ use crate::{FatDir, FatInode, FatInodeType};
 use alloc::boxed::Box;
 use alloc::string::ToString;
 use alloc::sync::{Arc, Weak};
-use fatfs::{IoBase,Read, Seek, SeekFrom, Write};
+use fatfs::{IoBase, Read, Seek, SeekFrom, Write};
 use rvfs::dentry::{DirEntry, DirFlags};
 use rvfs::inode::{simple_statfs, Inode, InodeMode};
 use rvfs::mount::MountFlags;
@@ -46,6 +46,7 @@ impl core2::io::Write for FatDevice {
         Ok(len)
     }
     fn flush(&mut self) -> core2::io::Result<()> {
+        self.device_file.flush();
         Ok(())
     }
 }
@@ -68,41 +69,37 @@ impl core2::io::Seek for FatDevice {
     }
 }
 
-
-impl IoBase for FatDevice{
+impl IoBase for FatDevice {
     type Error = ();
 }
-impl Write for FatDevice{
+impl Write for FatDevice {
     fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
-        
         core2::io::Write::write(self, buf).map_err(|_| ())
     }
 
     fn flush(&mut self) -> Result<(), Self::Error> {
-        
         core2::io::Write::flush(self).map_err(|_| ())
     }
 }
 
-impl Read for FatDevice{
+impl Read for FatDevice {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
-        
         core2::io::Read::read(self, buf).map_err(|_| ())
     }
 }
 
 impl Seek for FatDevice {
     fn seek(&mut self, pos: SeekFrom) -> Result<u64, Self::Error> {
-        
         let ans = match pos {
-            SeekFrom::Start(pos) => core2::io::Seek::seek(self,core2::io::SeekFrom::Start(pos)),
-            SeekFrom::End(pos) => core2::io::Seek::seek(self,core2::io::SeekFrom::End(pos)),
-            SeekFrom::Current(pos) => core2::io::Seek::seek(self,core2::io::SeekFrom::Current(pos)),
+            SeekFrom::Start(pos) => core2::io::Seek::seek(self, core2::io::SeekFrom::Start(pos)),
+            SeekFrom::End(pos) => core2::io::Seek::seek(self, core2::io::SeekFrom::End(pos)),
+            SeekFrom::Current(pos) => {
+                core2::io::Seek::seek(self, core2::io::SeekFrom::Current(pos))
+            }
         };
         ans.map_err(|_| ())
     }
 }
-
 
 pub const FATFS_SB_OPS: SuperBlockOps = {
     let mut sb_ops = SuperBlockOps::empty();
@@ -179,10 +176,7 @@ fn fat_sync_fs(sb_blk: Arc<SuperBlock>) -> StrResult<()> {
 }
 
 /// create the root inode for fat file system
-fn fat_root_inode(
-    sb_blk: Arc<SuperBlock>,
-    dir: FatDir,
-) -> Arc<Inode> {
+fn fat_root_inode(sb_blk: Arc<SuperBlock>, dir: FatDir) -> Arc<Inode> {
     let _device = sb_blk.device.as_ref().unwrap().clone();
     let inode = Inode::new(
         sb_blk,
