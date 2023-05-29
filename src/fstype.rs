@@ -136,7 +136,7 @@ fn fat_get_super_blk(
     }
     let stats = stats.unwrap();
     let sb_blk = SuperBlock {
-        dev_desc: fs.volume_id(),
+        dev_desc: 777,
         device: Some(device),
         block_size: stats.cluster_size(),
         dirty_flag: false,

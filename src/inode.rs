@@ -281,6 +281,7 @@ fn generate_fat_inode(
     let fat_data = FatInode::new(parent, current);
     let fat_data = Box::new(fat_data);
     inode.access_inner().data = Some(fat_data);
+    inode.access_inner().hard_links = 1;
     Arc::new(inode)
 }
 fn __fat_create_dir_or_file(
