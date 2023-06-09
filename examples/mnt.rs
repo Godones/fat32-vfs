@@ -6,6 +6,7 @@ use rvfs::{init_process_info, mount_rootfs, FakeFSC, PROCESS_FS_CONTEXT};
 use std::fs::{File, OpenOptions};
 use std::os::unix::fs::FileExt;
 use std::sync::Arc;
+use rvfs::info::VfsError;
 
 fn main() {
     env_logger::init();
@@ -48,12 +49,12 @@ impl FatImg {
 }
 
 impl Device for FatImg {
-    fn read(&self, buf: &mut [u8], offset: usize) -> Result<usize, ()> {
+    fn read(&self, buf: &mut [u8], offset: usize) -> Result<usize, VfsError> {
         let res = self.0.read_at(buf, offset as u64).unwrap();
         Ok(res)
     }
 
-    fn write(&self, buf: &[u8], offset: usize) -> Result<usize, ()> {
+    fn write(&self, buf: &[u8], offset: usize) -> Result<usize, VfsError> {
         let res = self.0.write_at(buf, offset as u64).unwrap();
         Ok(res)
     }

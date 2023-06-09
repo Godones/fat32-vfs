@@ -1,5 +1,5 @@
 use fat32_vfs::fstype::FAT;
-use rvfs::dentry::{vfs_rename, vfs_truncate};
+use rvfs::dentry::{Dirent64Iterator, vfs_rename, vfs_truncate};
 use rvfs::file::{
     vfs_mkdir, vfs_open_file, vfs_read_file, vfs_readdir, vfs_write_file, FileMode, OpenFlags,
 };
@@ -12,6 +12,7 @@ use std::fs::{File, OpenOptions};
 use std::os::unix::fs::FileExt;
 use std::ptr::null;
 use std::sync::Arc;
+use rvfs::info::VfsError;
 
 fn main() {
     env_logger::init();
@@ -21,9 +22,7 @@ fn main() {
     vfs_mkdir::<FakeFSC>("/fs", FileMode::FMODE_WRITE).unwrap();
     vfs_mkdir::<FakeFSC>("/fs/fat32", FileMode::FMODE_WRITE).unwrap();
     let file = vfs_open_file::<FakeFSC>("/fs/", OpenFlags::O_RDWR, FileMode::FMODE_WRITE).unwrap();
-    vfs_readdir(file).unwrap().into_iter().for_each(|name| {
-        println!("name: {}", name);
-    });
+    readdir(file);
     let file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -49,9 +48,8 @@ fn main() {
     let dir =
         vfs_open_file::<FakeFSC>("/fs/fat32/", OpenFlags::O_RDWR, FileMode::FMODE_WRITE).unwrap();
     println!("file: {:#?}", dir);
-    vfs_readdir(dir).unwrap().into_iter().for_each(|name| {
-        println!("name: {}", name);
-    });
+    readdir(dir);
+
     vfs_write_file::<FakeFSC>(file.clone(), "hello world".as_bytes(), 0).unwrap();
     let mut buf = [0u8; 20];
     let len = vfs_read_file::<FakeFSC>(file.clone(), &mut buf, 0).unwrap();
@@ -80,12 +78,12 @@ impl FatImg {
 }
 
 impl Device for FatImg {
-    fn read(&self, buf: &mut [u8], offset: usize) -> Result<usize, ()> {
+    fn read(&self, buf: &mut [u8], offset: usize) -> Result<usize, VfsError> {
         let res = self.0.read_at(buf, offset as u64).unwrap();
         Ok(res)
     }
 
-    fn write(&self, buf: &[u8], offset: usize) -> Result<usize, ()> {
+    fn write(&self, buf: &[u8], offset: usize) -> Result<usize, VfsError> {
         let res = self.0.write_at(buf, offset as u64).unwrap();
         Ok(res)
     }
@@ -117,4 +115,16 @@ impl DataOps for Fat32Data {
     fn data(&self) -> *const u8 {
         null()
     }
+}
+
+fn readdir(dir: Arc<rvfs::file::File>) {
+    let len = vfs_readdir(dir.clone(), &mut [0; 0]).unwrap();
+    assert!(len > 0);
+    let mut dirents = vec![0u8; len];
+
+    let r = vfs_readdir(dir, &mut dirents[..]).unwrap();
+    assert_eq!(r, len);
+    Dirent64Iterator::new(&dirents[..]).for_each(|x| {
+        println!("{} {:?} {}",x.get_name(),x.type_,x.ino);
+    });
 }

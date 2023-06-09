@@ -3,7 +3,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use fatfs::{Read, Seek, SeekFrom, Write};
 use log::{debug};
-use rvfs::dentry::{DirContext, DirEntryOps};
+use rvfs::dentry::{Dirent64, DirEntryOps, DirentType};
 use rvfs::file::{File, FileOps};
 use rvfs::StrResult;
 pub const FAT_FILE_FILE_OPS: FileOps = {
@@ -83,7 +83,7 @@ fn fat_write_file(file: Arc<File>, buf: &[u8], offset: u64) -> StrResult<usize> 
     };
 }
 
-fn fat_readdir(file: Arc<File>) -> StrResult<DirContext> {
+fn fat_readdir(file: Arc<File>,dirents: &mut [u8]) -> StrResult<usize> {
     let inode = file.f_dentry.access_inner().d_inode.clone();
     let fat_data = get_fat_data(inode);
     return if let FatInodeType::Dir(dir) = &fat_data.current {
@@ -94,7 +94,44 @@ fn fat_readdir(file: Arc<File>) -> StrResult<DirContext> {
                 data.push(0);
             }
         });
-        Ok(DirContext::new(data))
+        let value = if dirents.is_empty(){
+            dir.lock().iter().map(|x|{
+                if let Ok(x) = x {
+                    x.file_name().len() + 1
+                }else { 0 }
+            }).sum::<usize>()
+        }else {
+            let mut count = 0;
+            let buf_len = dirents.len();
+            let mut ptr = dirents.as_mut_ptr();
+            dir.lock().iter().enumerate().for_each(|(index,x)|{
+                if let Ok(sub_file) = x{
+                    let type_ = if sub_file.is_file(){
+                        DirentType::DT_REG
+                    }else if sub_file.is_dir() {
+                        DirentType::DT_DIR
+                    }else {
+                        DirentType::empty()
+                    };
+                    let dirent = Dirent64::new(&sub_file.file_name(), 1, index as i64, type_);
+                    if count + dirent.len() <= buf_len {
+                        let dirent_ptr = unsafe { &mut *(ptr as *mut Dirent64) };
+                        *dirent_ptr = dirent;
+                        let name_ptr = dirent_ptr.name.as_mut_ptr();
+                        unsafe {
+                            let mut name = sub_file.file_name().clone();
+                            name.push('\0');
+                            let len = name.len();
+                            name_ptr.copy_from(name.as_ptr(), len);
+                            ptr = ptr.add(dirent_ptr.len());
+                        }
+                        count += dirent_ptr.len();
+                    }
+                }
+            });
+            count
+        };
+        Ok(value)
     } else {
         Err("Not a dir")
     };
