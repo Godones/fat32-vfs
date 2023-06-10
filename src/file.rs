@@ -2,7 +2,7 @@ use crate::{get_fat_data, FatInodeType};
 use alloc::sync::Arc;
 
 use fatfs::{Read, Seek, SeekFrom, Write};
-use log::{debug};
+use log::{debug, warn};
 use rvfs::dentry::{Dirent64, DirEntryOps, DirentType};
 use rvfs::file::{File, FileOps};
 use rvfs::StrResult;
@@ -90,7 +90,8 @@ fn fat_readdir(file: Arc<File>,dirents: &mut [u8]) -> StrResult<usize> {
         let value = if dirents.is_empty(){
             dir.lock().iter().map(|x|{
                 if let Ok(x) = x {
-                    x.file_name().len() + 1
+                    let fake_dirent = Dirent64::new(&x.file_name(),1,0,DirentType::empty());
+                    fake_dirent.len()
                 }else { 0 }
             }).sum::<usize>()
         }else {
@@ -124,6 +125,7 @@ fn fat_readdir(file: Arc<File>,dirents: &mut [u8]) -> StrResult<usize> {
             });
             count
         };
+        warn!("fat readdir {}",value);
         Ok(value)
     } else {
         Err("Not a dir")
