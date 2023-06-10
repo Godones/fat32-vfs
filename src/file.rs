@@ -1,6 +1,6 @@
 use crate::{get_fat_data, FatInodeType};
 use alloc::sync::Arc;
-use alloc::vec::Vec;
+
 use fatfs::{Read, Seek, SeekFrom, Write};
 use log::{debug};
 use rvfs::dentry::{Dirent64, DirEntryOps, DirentType};
@@ -87,13 +87,6 @@ fn fat_readdir(file: Arc<File>,dirents: &mut [u8]) -> StrResult<usize> {
     let inode = file.f_dentry.access_inner().d_inode.clone();
     let fat_data = get_fat_data(inode);
     return if let FatInodeType::Dir(dir) = &fat_data.current {
-        let mut data = Vec::new();
-        dir.lock().iter().for_each(|x| {
-            if let Ok(x) = x {
-                data.extend_from_slice(x.file_name().as_bytes());
-                data.push(0);
-            }
-        });
         let value = if dirents.is_empty(){
             dir.lock().iter().map(|x|{
                 if let Ok(x) = x {
