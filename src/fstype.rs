@@ -154,8 +154,6 @@ fn fat_get_super_blk(
     let inode = fat_root_inode(sb_blk.clone(), fs.root_dir());
     let dentry = DirEntry::new(DirFlags::empty(), inode, FAT_DENTRY_OPS, Weak::new(), "/");
     sb_blk.update_root(Arc::new(dentry));
-    // inert the super block into file system type
-    fs_type.insert_super_blk(sb_blk.clone());
     Ok(sb_blk)
 }
 
