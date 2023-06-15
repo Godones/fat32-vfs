@@ -125,7 +125,6 @@ fn fat_readdir(file: Arc<File>,dirents: &mut [u8]) -> StrResult<usize> {
             });
             count
         };
-        warn!("fat readdir {}",value);
         Ok(value)
     } else {
         Err("Not a dir")
