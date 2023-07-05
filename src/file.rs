@@ -2,7 +2,7 @@ use crate::{get_fat_data, FatInodeType};
 use alloc::sync::Arc;
 
 use fatfs::{Read, Seek, SeekFrom, Write};
-use log::{debug, warn};
+use log::{debug};
 use rvfs::dentry::{Dirent64, DirEntryOps, DirentType};
 use rvfs::file::{File, FileOps};
 use rvfs::StrResult;

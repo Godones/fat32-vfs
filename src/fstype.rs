@@ -4,13 +4,12 @@ use crate::{FatDir, FatInode, FatInodeType};
 use alloc::boxed::Box;
 use alloc::string::ToString;
 use alloc::sync::{Arc, Weak};
+use core::cmp::min;
 use fatfs::{IoBase, Read, Seek, SeekFrom, Write};
 use rvfs::dentry::{DirEntry, DirFlags};
-use rvfs::inode::{simple_statfs, Inode, InodeMode};
+use rvfs::inode::{Inode, InodeMode};
 use rvfs::mount::MountFlags;
-use rvfs::superblock::{
-    DataOps, Device, FileSystemAttr, FileSystemType, SuperBlock, SuperBlockInner, SuperBlockOps,
-};
+use rvfs::superblock::{DataOps, Device, FileSystemAttr, FileSystemType, StatFs, SuperBlock, SuperBlockInner, SuperBlockOps};
 use rvfs::{ddebug, StrResult};
 use spin::Mutex;
 
@@ -103,7 +102,7 @@ impl Seek for FatDevice {
 
 pub const FATFS_SB_OPS: SuperBlockOps = {
     let mut sb_ops = SuperBlockOps::empty();
-    sb_ops.stat_fs = simple_statfs;
+    sb_ops.stat_fs = fat_statfs;
     sb_ops.sync_fs = fat_sync_fs;
     sb_ops
 };
@@ -188,5 +187,24 @@ fn fat_root_inode(sb_blk: Arc<SuperBlock>, dir: FatDir) -> Arc<Inode> {
     let parent = Arc::new(Mutex::new(dir));
     let fat_inode = FatInode::new(parent.clone(), FatInodeType::Dir(parent));
     inode.access_inner().data = Some(Box::new(fat_inode));
+    inode.access_inner().hard_links = 1;
     Arc::new(inode)
+}
+
+
+fn fat_statfs(super_blk: Arc<SuperBlock>) -> StrResult<StatFs>{
+    let mut name = [0u8; 32];
+    let fs_type = super_blk.file_system_type.upgrade().unwrap();
+    let fs_type = fs_type.name.as_bytes();
+    let min = min(fs_type.len(), name.len());
+    name[..min].copy_from_slice(&fs_type[..min]);
+    Ok(StatFs{
+        fs_type: super_blk.magic,
+        block_size: 512,
+        total_blocks: 64*1024*1024/512,
+        free_blocks: 64*1024*1024/512,
+        total_inodes: 999,
+        name_len: 255,
+        name,
+    })
 }
