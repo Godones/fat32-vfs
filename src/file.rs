@@ -84,8 +84,12 @@ fn fat_write_file(file: Arc<File>, buf: &[u8], offset: u64) -> StrResult<usize> 
 }
 
 fn fat_readdir(file: Arc<File>,dirents: &mut [u8]) -> StrResult<usize> {
+    let mut file_inner = file.access_inner();
+    let f_pos = file_inner.f_pos;
     let inode = file.f_dentry.access_inner().d_inode.clone();
     let fat_data = get_fat_data(inode);
+
+    let mut read_num = 0;
     return if let FatInodeType::Dir(dir) = &fat_data.current {
         let value = if dirents.is_empty(){
             dir.lock().iter().map(|x|{
@@ -98,7 +102,7 @@ fn fat_readdir(file: Arc<File>,dirents: &mut [u8]) -> StrResult<usize> {
             let mut count = 0;
             let buf_len = dirents.len();
             let mut ptr = dirents.as_mut_ptr();
-            dir.lock().iter().enumerate().for_each(|(index,x)|{
+            dir.lock().iter().skip(f_pos).enumerate().for_each(|(index,x)|{
                 if let Ok(sub_file) = x{
                     let type_ = if sub_file.is_file(){
                         DirentType::DT_REG
@@ -120,11 +124,15 @@ fn fat_readdir(file: Arc<File>,dirents: &mut [u8]) -> StrResult<usize> {
                             ptr = ptr.add(dirent_ptr.len());
                         }
                         count += dirent_ptr.len();
+                        read_num +=1;
+                    }else {
+                        return ;
                     }
                 }
             });
             count
         };
+        file_inner.f_pos += read_num;
         Ok(value)
     } else {
         Err("Not a dir")
