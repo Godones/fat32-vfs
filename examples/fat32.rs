@@ -1,13 +1,11 @@
 use fatfs::{IoBase, Read, Seek, SeekFrom, Write};
 use std::fs::OpenOptions;
 
-
-
 fn main() {
+    env_logger::init();
     let file = OpenOptions::new()
         .read(true)
         .write(true)
-        .create(false)
         .open("fat32.img")
         .unwrap();
     // file.set_len(64 * 1024 * 1024).unwrap();
@@ -16,51 +14,67 @@ fn main() {
     let fs = fatfs::FileSystem::new(buf_file, fatfs::FsOptions::new()).unwrap();
     let root_dir = fs.root_dir();
     let mut file = root_dir.create_file("root.txt").unwrap();
-    println!("----------------------------------");
-    file.write_all(b"Hello World!").unwrap();
-    let mut buf = [0u8; 100];
-    file.seek(SeekFrom::Start(0)).unwrap();
-    let len = file.read(&mut buf).unwrap();
-    println!("Read {} bytes: {:?}", len, &buf[..len]);
-    let f1 = root_dir.create_dir("/d1").unwrap();
-    let _file = root_dir.create_dir("/d1/hello.txt").unwrap();
-    f1.iter()
-        .for_each(|x| println!("{:#?}", x.unwrap().file_name()));
-    println!("----------");
 
-    root_dir
-        .iter()
-        .for_each(|x| println!("{:#?}", x.unwrap().file_name()));
-    println!("----------");
-
-    root_dir.rename("root.txt", &f1, "root2.txt").unwrap();
-    root_dir
-        .iter()
-        .for_each(|x| println!("{:#?}", x.unwrap().file_name()));
-    println!("----------");
-    f1.iter()
-        .for_each(|x| println!("{:#?}", x.unwrap().file_name()));
-
-    let mut test = root_dir.create_file("test.txt").unwrap();
-    let buf = [0u8; 4090];
-    // for i in 0..buf.len() {
-    //     buf[i] = rand::random();
-    // }
-    test.write_all(&buf).unwrap();
-    let offset = test.offset();
-    println!("Offset: {}", offset);
-    test.seek(SeekFrom::Start(0)).unwrap();
-    let mut nbuf = [0u8; 512];
-    let mut count = 0;
-    loop {
-        let len = test.read(&mut nbuf).unwrap();
-        if len == 0 {
-            break;
-        }
-        assert_eq!(nbuf[..len], buf[count..count + len]);
-        count += len;
-        println!("Read {} bytes", len);
+    let data = [1u8;1024];
+    for _i in 0..49*1024{
+        file.write_all(&data).unwrap();
     }
+    file.seek(SeekFrom::Start(0)).unwrap();
+    file.truncate().unwrap();
+    root_dir.remove("root.txt").unwrap();
+    let xfs = root_dir.get_fs();
+    log::error!("try umount");
+    xfs.unmount().unwrap();
+    log::error!("unmount");
+    // let mut new_file = root_dir.create_file("new.txt").unwrap();
+    // for i in 0..40*1024{
+    //     new_file.write_all(&data).unwrap();
+    // }
+    println!("----------------------------------");
+    // file.write_all(b"Hello World!").unwrap();
+    // let mut buf = [0u8; 100];
+    // file.seek(SeekFrom::Start(0)).unwrap();
+    // let len = file.read(&mut buf).unwrap();
+    // println!("Read {} bytes: {:?}", len, &buf[..len]);
+    // let f1 = root_dir.create_dir("/d1").unwrap();
+    // let _file = root_dir.create_dir("/d1/hello.txt").unwrap();
+    // f1.iter()
+    //     .for_each(|x| println!("{:#?}", x.unwrap().file_name()));
+    // println!("----------");
+    //
+    // root_dir
+    //     .iter()
+    //     .for_each(|x| println!("{:#?}", x.unwrap().file_name()));
+    // println!("----------");
+    //
+    // root_dir.rename("root.txt", &f1, "root2.txt").unwrap();
+    // root_dir
+    //     .iter()
+    //     .for_each(|x| println!("{:#?}", x.unwrap().file_name()));
+    // println!("----------");
+    // f1.iter()
+    //     .for_each(|x| println!("{:#?}", x.unwrap().file_name()));
+    //
+    // let mut test = root_dir.create_file("test.txt").unwrap();
+    // let buf = [0u8; 4090];
+    // // for i in 0..buf.len() {
+    // //     buf[i] = rand::random();
+    // // }
+    // test.write_all(&buf).unwrap();
+    // let offset = test.offset();
+    // println!("Offset: {}", offset);
+    // test.seek(SeekFrom::Start(0)).unwrap();
+    // let mut nbuf = [0u8; 512];
+    // let mut count = 0;
+    // loop {
+    //     let len = test.read(&mut nbuf).unwrap();
+    //     if len == 0 {
+    //         break;
+    //     }
+    //     assert_eq!(nbuf[..len], buf[count..count + len]);
+    //     count += len;
+    //     println!("Read {} bytes", len);
+    // }
 }
 
 struct BufStream {
@@ -89,6 +103,7 @@ impl Write for BufStream {
     }
 
     fn flush(&mut self) -> Result<(), Self::Error> {
+        println!("flush");
         std::io::Write::flush(&mut self.file).map_err(|_| ())
     }
 }

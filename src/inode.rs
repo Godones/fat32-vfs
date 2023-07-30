@@ -3,8 +3,8 @@ use crate::{get_fat_data, FatDir, FatInode, FatInodeType};
 use alloc::boxed::Box;
 use alloc::string::ToString;
 use alloc::sync::Arc;
-use fatfs::{Error, Seek};
-use log::debug;
+use fatfs::{Error, Seek, SeekFrom};
+use log::{debug, trace};
 use rvfs::dentry::DirEntry;
 use rvfs::file::{FileMode, FileOps};
 use rvfs::inode::{Inode, InodeMode, InodeOps};
@@ -94,7 +94,9 @@ fn fat_rmdir(dir: Arc<Inode>, dentry: Arc<DirEntry>) -> StrResult<()> {
 }
 
 fn fat_unlink(dir: Arc<Inode>, dentry: Arc<DirEntry>) -> StrResult<()> {
-    let fat_data = get_fat_data(dir);
+    let file_data = get_fat_data(dentry.access_inner().d_inode.clone());
+    delete_file(file_data).unwrap();
+    let fat_data = get_fat_data(dir.clone());
     let name = dentry.access_inner().d_name.clone();
     let res = __fat_remove_dir_or_file(fat_data, &name);
     match res {
@@ -318,11 +320,37 @@ fn __fat_remove_dir_or_file(fat_data: &mut FatInode, name: &str) -> Result<(), E
     match current {
         FatInodeType::Dir(dir) => {
             let dir_lock = dir.lock();
+            trace!("remove dir or file");
             dir_lock.remove(name)?;
+            let fs = dir_lock.get_fs();
+            fs.unmount().unwrap();
+            trace!("remove dir or file end fs_ptr:{:p}",fs);
         }
         _ => {
             return Err(Error::InvalidInput);
         }
     };
+    Ok(())
+}
+
+
+fn delete_file(fat_data: &mut FatInode)-> Result<(), Error<()>>{
+    let current = &fat_data.current;
+    match current {
+        FatInodeType::File((name,file)) => {
+            trace!("truncate file {} to 0",name);
+            if file.is_none() {
+                return Err(Error::InvalidInput);
+            }
+            let mut file = file.as_ref().unwrap().lock();
+            file.seek(SeekFrom::Start(0)).unwrap();
+            file.truncate().unwrap();
+            let fs = file.get_fs();
+            trace!("truncate file end fs_ptr:{:p}",fs);
+        }
+        _ => {
+            return Err(Error::InvalidInput);
+        }
+    }
     Ok(())
 }

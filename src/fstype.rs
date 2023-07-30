@@ -163,12 +163,8 @@ fn fat_kill_super_blk(super_blk: Arc<SuperBlock>) {
 
 fn fat_sync_fs(sb_blk: Arc<SuperBlock>) -> StrResult<()> {
     let device = sb_blk.device.as_ref().unwrap().clone();
-    let fat_device = FatDevice::new(device);
-    let fs = fatfs::FileSystem::new(fat_device, fatfs::FsOptions::new()).unwrap();
-    let res = fs.unmount();
-    if res.is_err() {
-        return Err("sync error");
-    }
+    let mut fat_device = FatDevice::new(device);
+    fat_device.flush().unwrap();
     Ok(())
 }
 
