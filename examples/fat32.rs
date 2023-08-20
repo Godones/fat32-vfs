@@ -15,8 +15,8 @@ fn main() {
     let root_dir = fs.root_dir();
     let mut file = root_dir.create_file("root.txt").unwrap();
 
-    let data = [1u8;1024];
-    for _i in 0..49*1024{
+    let data = [1u8; 1024];
+    for _i in 0..49 * 1024 {
         file.write_all(&data).unwrap();
     }
     file.seek(SeekFrom::Start(0)).unwrap();

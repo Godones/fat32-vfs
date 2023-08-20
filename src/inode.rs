@@ -324,7 +324,7 @@ fn __fat_remove_dir_or_file(fat_data: &mut FatInode, name: &str) -> Result<(), E
             dir_lock.remove(name)?;
             let fs = dir_lock.get_fs();
             fs.unmount().unwrap();
-            trace!("remove dir or file end fs_ptr:{:p}",fs);
+            trace!("remove dir or file end fs_ptr:{:p}", fs);
         }
         _ => {
             return Err(Error::InvalidInput);
@@ -333,12 +333,11 @@ fn __fat_remove_dir_or_file(fat_data: &mut FatInode, name: &str) -> Result<(), E
     Ok(())
 }
 
-
-fn delete_file(fat_data: &mut FatInode)-> Result<(), Error<()>>{
+fn delete_file(fat_data: &mut FatInode) -> Result<(), Error<()>> {
     let current = &fat_data.current;
     match current {
-        FatInodeType::File((name,file)) => {
-            trace!("truncate file {} to 0",name);
+        FatInodeType::File((name, file)) => {
+            trace!("truncate file {} to 0", name);
             if file.is_none() {
                 return Err(Error::InvalidInput);
             }
@@ -346,7 +345,7 @@ fn delete_file(fat_data: &mut FatInode)-> Result<(), Error<()>>{
             file.seek(SeekFrom::Start(0)).unwrap();
             file.truncate().unwrap();
             let fs = file.get_fs();
-            trace!("truncate file end fs_ptr:{:p}",fs);
+            trace!("truncate file end fs_ptr:{:p}", fs);
         }
         _ => {
             return Err(Error::InvalidInput);

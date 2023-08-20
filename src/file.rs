@@ -1,9 +1,11 @@
 use crate::{get_fat_data, FatInodeType};
 use alloc::sync::Arc;
+use alloc::vec;
+use core::cmp::max;
 
 use fatfs::{Read, Seek, SeekFrom, Write};
-use log::{debug};
-use rvfs::dentry::{Dirent64, DirEntryOps, DirentType};
+use log::debug;
+use rvfs::dentry::{DirEntryOps, Dirent64, DirentType};
 use rvfs::file::{File, FileOps};
 use rvfs::StrResult;
 pub const FAT_FILE_FILE_OPS: FileOps = {
@@ -62,6 +64,12 @@ fn fat_read_file(file: Arc<File>, buf: &mut [u8], offset: u64) -> StrResult<usiz
 fn fat_write_file(file: Arc<File>, buf: &[u8], offset: u64) -> StrResult<usize> {
     // warn!("fat write {} {}",buf.len(),offset);
     let inode = file.f_dentry.access_inner().d_inode.clone();
+    let f_size = file
+        .f_dentry
+        .access_inner()
+        .d_inode
+        .access_inner()
+        .file_size;
     let fat_data = get_fat_data(inode);
     let _parent = &fat_data.parent;
     return if let FatInodeType::File((_name, file)) = &fat_data.current {
@@ -69,6 +77,15 @@ fn fat_write_file(file: Arc<File>, buf: &[u8], offset: u64) -> StrResult<usize> 
             return Err("Open file failed");
         }
         let mut file = file.as_ref().unwrap().lock();
+
+        if f_size < offset as usize {
+            let max_offset = max(offset as usize, file.offset() as usize);
+            if max_offset > f_size {
+                let data = vec![0u8; max_offset - f_size];
+                file.write_all(&data).map_err(|_| "Write file failed")?;
+            }
+        }
+
         if file.offset() != offset as u32 {
             file.seek(SeekFrom::Start(offset))
                 .map_err(|_| "Seek file failed")?;
@@ -83,7 +100,7 @@ fn fat_write_file(file: Arc<File>, buf: &[u8], offset: u64) -> StrResult<usize> 
     };
 }
 
-fn fat_readdir(file: Arc<File>,dirents: &mut [u8]) -> StrResult<usize> {
+fn fat_readdir(file: Arc<File>, dirents: &mut [u8]) -> StrResult<usize> {
     let mut file_inner = file.access_inner();
     let f_pos = file_inner.f_pos;
     let inode = file.f_dentry.access_inner().d_inode.clone();
@@ -91,45 +108,54 @@ fn fat_readdir(file: Arc<File>,dirents: &mut [u8]) -> StrResult<usize> {
 
     let mut read_num = 0;
     return if let FatInodeType::Dir(dir) = &fat_data.current {
-        let value = if dirents.is_empty(){
-            dir.lock().iter().map(|x|{
-                if let Ok(x) = x {
-                    let fake_dirent = Dirent64::new(&x.file_name(),1,0,DirentType::empty());
-                    fake_dirent.len()
-                }else { 0 }
-            }).sum::<usize>()
-        }else {
+        let value = if dirents.is_empty() {
+            dir.lock()
+                .iter()
+                .map(|x| {
+                    if let Ok(x) = x {
+                        let fake_dirent = Dirent64::new(&x.file_name(), 1, 0, DirentType::empty());
+                        fake_dirent.len()
+                    } else {
+                        0
+                    }
+                })
+                .sum::<usize>()
+        } else {
             let mut count = 0;
             let buf_len = dirents.len();
             let mut ptr = dirents.as_mut_ptr();
-            dir.lock().iter().skip(f_pos).enumerate().for_each(|(index,x)|{
-                if let Ok(sub_file) = x{
-                    let type_ = if sub_file.is_file(){
-                        DirentType::DT_REG
-                    }else if sub_file.is_dir() {
-                        DirentType::DT_DIR
-                    }else {
-                        DirentType::empty()
-                    };
-                    let dirent = Dirent64::new(&sub_file.file_name(), 1, index as i64, type_);
-                    if count + dirent.len() <= buf_len {
-                        let dirent_ptr = unsafe { &mut *(ptr as *mut Dirent64) };
-                        *dirent_ptr = dirent;
-                        let name_ptr = dirent_ptr.name.as_mut_ptr();
-                        unsafe {
-                            let mut name = sub_file.file_name().clone();
-                            name.push('\0');
-                            let len = name.len();
-                            name_ptr.copy_from(name.as_ptr(), len);
-                            ptr = ptr.add(dirent_ptr.len());
+            dir.lock()
+                .iter()
+                .skip(f_pos)
+                .enumerate()
+                .for_each(|(index, x)| {
+                    if let Ok(sub_file) = x {
+                        let type_ = if sub_file.is_file() {
+                            DirentType::DT_REG
+                        } else if sub_file.is_dir() {
+                            DirentType::DT_DIR
+                        } else {
+                            DirentType::empty()
+                        };
+                        let dirent = Dirent64::new(&sub_file.file_name(), 1, index as i64, type_);
+                        if count + dirent.len() <= buf_len {
+                            let dirent_ptr = unsafe { &mut *(ptr as *mut Dirent64) };
+                            *dirent_ptr = dirent;
+                            let name_ptr = dirent_ptr.name.as_mut_ptr();
+                            unsafe {
+                                let mut name = sub_file.file_name().clone();
+                                name.push('\0');
+                                let len = name.len();
+                                name_ptr.copy_from(name.as_ptr(), len);
+                                ptr = ptr.add(dirent_ptr.len());
+                            }
+                            count += dirent_ptr.len();
+                            read_num += 1;
+                        } else {
+                            return;
                         }
-                        count += dirent_ptr.len();
-                        read_num +=1;
-                    }else {
-                        return ;
                     }
-                }
-            });
+                });
             count
         };
         file_inner.f_pos += read_num;

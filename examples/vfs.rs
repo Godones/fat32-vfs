@@ -1,8 +1,9 @@
 use fat32_vfs::fstype::FAT;
-use rvfs::dentry::{Dirent64Iterator, vfs_rename, vfs_truncate};
+use rvfs::dentry::{vfs_rename, vfs_truncate, Dirent64Iterator};
 use rvfs::file::{
     vfs_mkdir, vfs_open_file, vfs_read_file, vfs_readdir, vfs_write_file, FileMode, OpenFlags,
 };
+use rvfs::info::VfsError;
 use rvfs::mount::{do_mount, MountFlags};
 use rvfs::stat::{vfs_getattr, StatFlags};
 use rvfs::superblock::{register_filesystem, DataOps, Device};
@@ -12,7 +13,6 @@ use std::fs::{File, OpenOptions};
 use std::os::unix::fs::FileExt;
 use std::ptr::null;
 use std::sync::Arc;
-use rvfs::info::VfsError;
 
 fn main() {
     env_logger::init();
@@ -125,6 +125,6 @@ fn readdir(dir: Arc<rvfs::file::File>) {
     let r = vfs_readdir(dir, &mut dirents[..]).unwrap();
     assert_eq!(r, len);
     Dirent64Iterator::new(&dirents[..]).for_each(|x| {
-        println!("{} {:?} {}",x.get_name(),x.type_,x.ino);
+        println!("{} {:?} {}", x.get_name(), x.type_, x.ino);
     });
 }

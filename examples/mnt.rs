@@ -1,5 +1,5 @@
 use fat32_vfs::fstype::FAT;
-use rvfs::file::{vfs_mkdir, vfs_open_file, FileMode, OpenFlags, vfs_write_file, vfs_readdir};
+use rvfs::file::{vfs_mkdir, vfs_open_file, vfs_readdir, vfs_write_file, FileMode, OpenFlags};
 use rvfs::mount::{do_mount, MountFlags};
 use rvfs::superblock::{register_filesystem, DataOps, Device};
 use rvfs::{init_process_info, mount_rootfs, FakeFSC, PROCESS_FS_CONTEXT};
@@ -44,28 +44,36 @@ fn main() {
     }
     let root = vfs_open_file::<FakeFSC>("/", OpenFlags::O_RDWR, FileMode::FMODE_WRITE).unwrap();
     // println!("mnt: {:#?}", mnt);
-    let file = vfs_open_file::<FakeFSC>("/test.txt", OpenFlags::O_RDWR|OpenFlags::O_CREAT, FileMode::FMODE_RDWR).unwrap();
-    let data = [1u8;1024];
+    let file = vfs_open_file::<FakeFSC>(
+        "/test.txt",
+        OpenFlags::O_RDWR | OpenFlags::O_CREAT,
+        FileMode::FMODE_RDWR,
+    )
+    .unwrap();
+    let data = [1u8; 1024];
     let mut offset = 0;
-    for _i in 0..49*1024{
+    for _i in 0..49 * 1024 {
         vfs_write_file::<FakeFSC>(file.clone(), &data, offset).unwrap();
         offset += 1024;
     }
     println!("offset: {}", offset);
     vfs_unlink::<FakeFSC>("test.txt").unwrap();
-    let file = vfs_open_file::<FakeFSC>("/test1.txt", OpenFlags::O_RDWR|OpenFlags::O_CREAT, FileMode::FMODE_RDWR).unwrap();
+    let file = vfs_open_file::<FakeFSC>(
+        "/test1.txt",
+        OpenFlags::O_RDWR | OpenFlags::O_CREAT,
+        FileMode::FMODE_RDWR,
+    )
+    .unwrap();
     readdir(root);
-    let data = [1u8;1024];
+    let data = [1u8; 1024];
     let mut offset = 0;
-    for _i in 0..40*1024{
-        vfs_write_file::<FakeFSC>(file.clone(), &data, offset).expect(
-            format!("write error: {}", offset).as_str()
-        );
+    for _i in 0..40 * 1024 {
+        vfs_write_file::<FakeFSC>(file.clone(), &data, offset)
+            .expect(format!("write error: {}", offset).as_str());
         offset += 4096;
     }
     println!("offset: {}", offset);
 }
-
 
 fn readdir(dir: Arc<rvfs::file::File>) {
     let len = vfs_readdir(dir.clone(), &mut [0; 0]).unwrap();
@@ -75,12 +83,9 @@ fn readdir(dir: Arc<rvfs::file::File>) {
     let r = vfs_readdir(dir, &mut dirents[..]).unwrap();
     assert_eq!(r, len);
     Dirent64Iterator::new(&dirents[..]).for_each(|x| {
-        println!("{} {:?} {}",x.get_name(),x.type_,x.ino);
+        println!("{} {:?} {}", x.get_name(), x.type_, x.ino);
     });
 }
-
-
-
 
 #[derive(Debug)]
 struct FatImg(Mutex<File>);

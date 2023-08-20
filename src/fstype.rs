@@ -9,7 +9,10 @@ use fatfs::{IoBase, Read, Seek, SeekFrom, Write};
 use rvfs::dentry::{DirEntry, DirFlags};
 use rvfs::inode::{Inode, InodeMode};
 use rvfs::mount::MountFlags;
-use rvfs::superblock::{DataOps, Device, FileSystemAttr, FileSystemType, StatFs, SuperBlock, SuperBlockInner, SuperBlockOps};
+use rvfs::superblock::{
+    DataOps, Device, FileSystemAttr, FileSystemType, StatFs, SuperBlock, SuperBlockInner,
+    SuperBlockOps,
+};
 use rvfs::{ddebug, StrResult};
 use spin::Mutex;
 
@@ -187,18 +190,17 @@ fn fat_root_inode(sb_blk: Arc<SuperBlock>, dir: FatDir) -> Arc<Inode> {
     Arc::new(inode)
 }
 
-
-fn fat_statfs(super_blk: Arc<SuperBlock>) -> StrResult<StatFs>{
+fn fat_statfs(super_blk: Arc<SuperBlock>) -> StrResult<StatFs> {
     let mut name = [0u8; 32];
     let fs_type = super_blk.file_system_type.upgrade().unwrap();
     let fs_type = fs_type.name.as_bytes();
     let min = min(fs_type.len(), name.len());
     name[..min].copy_from_slice(&fs_type[..min]);
-    Ok(StatFs{
+    Ok(StatFs {
         fs_type: super_blk.magic,
         block_size: 512,
-        total_blocks: 64*1024*1024/512,
-        free_blocks: 64*1024*1024/512,
+        total_blocks: 64 * 1024 * 1024 / 512,
+        free_blocks: 64 * 1024 * 1024 / 512,
         total_inodes: 999,
         name_len: 255,
         name,
